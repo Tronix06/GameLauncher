@@ -1,23 +1,120 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Security.Cryptography;
+using System.Security.Cryptography; // Para el hash SHA256
 using System.Text;
-using System.Xml.Linq;
+using MySql.Data.MySqlClient; // ¡Importante! El conector de MySQL
 
 namespace GameLauncher
 {
     public class GestorUsuarios
     {
-        private string rutaXml = "usuarios.xml";
+        private DatabaseConnection dbConnection;
 
-        // Encriptar contraseña
-        public static string Encriptar(string texto)
+        public GestorUsuarios()
+        {
+            dbConnection = new DatabaseConnection();
+        }
+
+        // --- MÉTODO DE LOGIN (Requisito: Consulta SQL SELECT) ---
+        public string ValidarLogin(string usuario, string password)
+        {
+            // 1. Convertimos la contraseña que escribe el usuario a Hash para compararla
+            string passHash = GenerarHash(password);
+
+            MySqlConnection conn = null;
+            try
+            {
+                conn = dbConnection.GetConnection();
+
+                // QUERY SQL: Buscamos si existe ese usuario Y esa contraseña
+                string query = "SELECT COUNT(*) FROM usuarios WHERE nombre_usuario = @user AND password_hash = @pass";
+
+                MySqlCommand cmd = new MySqlCommand(query, conn);
+                // Usamos parámetros (@user) para evitar Hackeos (SQL Injection) - ¡Vital para nota!
+                cmd.Parameters.AddWithValue("@user", usuario);
+                cmd.Parameters.AddWithValue("@pass", passHash);
+
+                // ExecuteScalar devuelve el primer dato (el conteo de usuarios encontrados)
+                long count = (long)cmd.ExecuteScalar();
+
+                if (count > 0)
+                {
+                    return "OK"; // Existe y la contraseña coincide
+                }
+                else
+                {
+                    // Si no coincide, verificamos si es que el usuario no existe o la pass está mal
+                    // (Opcional: Para simplificar la práctica, si no encuentra, devolvemos error genérico o PASS_INCORRECTA)
+                    return VerificarSiUsuarioExiste(usuario) ? "PASS_INCORRECTA" : "NO_EXISTE";
+                }
+            }
+            catch (Exception ex)
+            {
+                // Si falla la BBDD (está apagada, error de red...)
+                System.Windows.MessageBox.Show("Error de BBDD: " + ex.Message);
+                return "ERROR_CONEXION";
+            }
+            finally
+            {
+                dbConnection.CloseConnection();
+            }
+        }
+
+        // Método auxiliar para saber si el error es de contraseña o de usuario
+        private bool VerificarSiUsuarioExiste(string usuario)
+        {
+            try
+            {
+                MySqlConnection conn = dbConnection.GetConnection();
+                string query = "SELECT COUNT(*) FROM usuarios WHERE nombre_usuario = @user";
+                MySqlCommand cmd = new MySqlCommand(query, conn);
+                cmd.Parameters.AddWithValue("@user", usuario);
+                long count = (long)cmd.ExecuteScalar();
+                return count > 0;
+            }
+            catch { return false; }
+        }
+
+        // --- MÉTODO DE REGISTRO (Requisito: Sentencia INSERT) ---
+        public bool RegistrarUsuario(string usuario, string password, string email)
+        {
+            // Primero verificamos si ya existe para no duplicar
+            if (VerificarSiUsuarioExiste(usuario)) return false;
+
+            string passHash = GenerarHash(password); // Encriptamos antes de guardar
+
+            try
+            {
+                MySqlConnection conn = dbConnection.GetConnection();
+
+                // QUERY SQL: Insertamos el nuevo usuario
+                string query = "INSERT INTO usuarios (nombre_usuario, password_hash, email, fecha_registro) VALUES (@user, @pass, @email, NOW())";
+
+                MySqlCommand cmd = new MySqlCommand(query, conn);
+                cmd.Parameters.AddWithValue("@user", usuario);
+                cmd.Parameters.AddWithValue("@pass", passHash);
+                cmd.Parameters.AddWithValue("@email", email);
+
+                int filasAfectadas = cmd.ExecuteNonQuery(); // Ejecuta el INSERT
+
+                return filasAfectadas > 0; // Si guardó 1 fila, es true
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+            finally
+            {
+                dbConnection.CloseConnection();
+            }
+        }
+
+        // --- UTILIDAD DE ENCRIPTACIÓN (Igual que antes) ---
+        private string GenerarHash(string textoPlano)
         {
             using (SHA256 sha256 = SHA256.Create())
             {
-                byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(texto));
+                byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(textoPlano));
                 StringBuilder builder = new StringBuilder();
                 for (int i = 0; i < bytes.Length; i++)
                 {
@@ -25,122 +122,6 @@ namespace GameLauncher
                 }
                 return builder.ToString();
             }
-        }
-
-        // Cargar usuarios del XML
-        public List<Usuario> CargarUsuarios()
-        {
-            if (!File.Exists(rutaXml)) return new List<Usuario>();
-
-            try
-            {
-                XDocument doc = XDocument.Load(rutaXml);
-                var lista = new List<Usuario>();
-
-                foreach (var elemento in doc.Descendants("Usuario"))
-                {
-                    Usuario u = new Usuario();
-                    u.Nombre = elemento.Element("Nombre")?.Value;
-                    u.PasswordHash = elemento.Element("Password")?.Value;
-                    u.Email = elemento.Element("Email")?.Value ?? "";
-
-                    int intentos = 0;
-                    int.TryParse(elemento.Element("Intentos")?.Value, out intentos);
-                    u.IntentosFallidos = intentos;
-
-                    string bloqueoStr = elemento.Element("Bloqueo")?.Value;
-                    if (!string.IsNullOrEmpty(bloqueoStr))
-                    {
-                        u.FechaDesbloqueo = DateTime.Parse(bloqueoStr);
-                    }
-
-                    lista.Add(u);
-                }
-                return lista;
-            }
-            catch
-            {
-                return new List<Usuario>();
-            }
-        }
-
-        // Guardar usuarios en el XML
-        public void GuardarUsuarios(List<Usuario> listaUsuarios)
-        {
-            XDocument doc = new XDocument(new XElement("Usuarios"));
-
-            foreach (var u in listaUsuarios)
-            {
-                XElement nodo = new XElement("Usuario",
-                    new XElement("Nombre", u.Nombre),
-                    new XElement("Password", u.PasswordHash),
-                    new XElement("Email", u.Email),
-                    new XElement("Intentos", u.IntentosFallidos),
-                    new XElement("Bloqueo", u.FechaDesbloqueo?.ToString() ?? "")
-                );
-                doc.Root.Add(nodo);
-            }
-
-            doc.Save(rutaXml);
-        }
-
-        // Lógica de Login (Esto es lo que probaremos)
-        public string ValidarLogin(string usuario, string passwordPlana)
-        {
-            var usuarios = CargarUsuarios();
-            var userObj = usuarios.FirstOrDefault(u => u.Nombre == usuario);
-
-            if (userObj == null) return "NO_EXISTE";
-
-            if (userObj.EstaBloqueado())
-            {
-                double minutos = (userObj.FechaDesbloqueo.Value - DateTime.Now).TotalMinutes;
-                return $"BLOQUEADO|{Math.Ceiling(minutos)}";
-            }
-
-            string hashIntroducido = Encriptar(passwordPlana);
-
-            if (userObj.PasswordHash == hashIntroducido)
-            {
-                userObj.IntentosFallidos = 0;
-                userObj.FechaDesbloqueo = null;
-                GuardarUsuarios(usuarios);
-                return "OK";
-            }
-            else
-            {
-                userObj.IntentosFallidos++;
-
-                if (userObj.IntentosFallidos >= 3)
-                {
-                    userObj.FechaDesbloqueo = DateTime.Now.AddMinutes(5);
-                    GuardarUsuarios(usuarios);
-                    return "BLOQUEADO_AHORA";
-                }
-
-                GuardarUsuarios(usuarios);
-                return "PASS_INCORRECTA";
-            }
-        }
-
-        // Registrar nuevo usuario
-        public bool RegistrarUsuario(string nombre, string passPlana, string email)
-        {
-            var usuarios = CargarUsuarios();
-
-            if (usuarios.Any(u => u.Nombre == nombre)) return false;
-
-            Usuario nuevo = new Usuario
-            {
-                Nombre = nombre,
-                PasswordHash = Encriptar(passPlana),
-                Email = email,
-                IntentosFallidos = 0
-            };
-
-            usuarios.Add(nuevo);
-            GuardarUsuarios(usuarios);
-            return true;
         }
     }
 }

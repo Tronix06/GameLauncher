@@ -23,6 +23,9 @@ namespace GameLauncher
         public MainWindow()
         {
             InitializeComponent();
+            // PRUEBA TEMPORAL DE CONEXIÓN
+            DatabaseConnection pruebaDB = new DatabaseConnection();
+            pruebaDB.ProbarConexion(); // Esto lanzará el MessageBox de éxito o error que programamos
 
             double altoPantalla = SystemParameters.PrimaryScreenHeight;
             this.Height = 600;
