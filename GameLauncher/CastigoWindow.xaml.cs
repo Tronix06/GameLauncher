@@ -38,7 +38,8 @@ namespace GameLauncher
 
             if (string.IsNullOrWhiteSpace(mensaje))
             {
-                MessageBox.Show("Por favor, escribe un motivo para tu apelación.", "Campo vacío", MessageBoxButton.OK, MessageBoxImage.Warning);
+                // MENSAJE PERSONALIZADO (AVISO)
+                BiTronixMsgBox.Show("Por favor, escribe un motivo para tu apelación.", "Campo Vacío", BiTronixMsgBox.Type.Warning);
                 return;
             }
 
@@ -55,14 +56,17 @@ namespace GameLauncher
                     cmd.Parameters.AddWithValue("@msg", mensaje);
 
                     cmd.ExecuteNonQuery();
-                    // ... dentro del try, después de cmd.ExecuteNonQuery();
 
+                    // Log de auditoría
                     LogManager.RegistrarAccion(usuarioCastigado.Nombre, "SOLICITUD_APELACION", "El usuario ha solicitado revisión de su baneo.");
-
-                    // ... luego sigue el MessageBox.Show(...)
                 }
 
-                MessageBox.Show("Tu apelación ha sido enviada a los administradores.\nRevisaremos tu caso pronto.", "Enviado", MessageBoxButton.OK, MessageBoxImage.Information);
+                // MENSAJE PERSONALIZADO (ÉXITO)
+                BiTronixMsgBox.Show(
+                    "Tu apelación ha sido enviada a los administradores.\nRevisaremos tu caso pronto.",
+                    "Enviado Correctamente",
+                    BiTronixMsgBox.Type.Success
+                );
 
                 // Deshabilitamos el botón para que no spamee
                 btnEnviar.IsEnabled = false;
@@ -70,7 +74,8 @@ namespace GameLauncher
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error al enviar apelación: " + ex.Message);
+                // MENSAJE PERSONALIZADO (ERROR)
+                BiTronixMsgBox.Show("Error al enviar apelación: " + ex.Message, "Error Crítico", BiTronixMsgBox.Type.Error);
             }
         }
 

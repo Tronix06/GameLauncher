@@ -4,6 +4,8 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using MySql.Data.MySqlClient;
+using System.Security.Cryptography; // Para encriptar pass
+using System.Text;
 
 namespace GameLauncher
 {
@@ -29,8 +31,8 @@ namespace GameLauncher
             InitializeComponent();
             CargarUsuarios();
             CargarLogs();
-            CargarApelaciones(); // Nueva función
-            VerificarNotificaciones(); // Lógica del Popup y Badge
+            CargarApelaciones();
+            VerificarNotificaciones();
 
             txtAdminUser.Text = " | Sesión iniciada";
         }
@@ -48,8 +50,11 @@ namespace GameLauncher
 
                     if (count > 0)
                     {
-                        // 1. Mostrar Popup al entrar
-                        MessageBox.Show($"Tienes {count} apelaciones pendientes de revisión.", "Atención Admin", MessageBoxButton.OK, MessageBoxImage.Information);
+                        // 1. Mostrar Popup Personalizado (Amarillo/Warning)
+                        BiTronixMsgBox.Show(
+                            $"Tienes {count} apelaciones pendientes de revisión.\nPor favor, ve a la pestaña de Apelaciones.",
+                            "Atención Admin",
+                            BiTronixMsgBox.Type.Warning);
 
                         // 2. Encender el Badge Rojo en la pestaña
                         badgeNotificacion.Visibility = Visibility.Visible;
@@ -72,7 +77,6 @@ namespace GameLauncher
             {
                 using (var conn = db.GetConnection())
                 {
-                    // JOIN para traer el nombre del usuario en vez del ID
                     string query = "SELECT a.id, a.usuario_afectado_id, u.nombre_usuario, a.mensaje_apelacion, a.estado, a.fecha_solicitud " +
                                    "FROM apelaciones a " +
                                    "JOIN usuarios u ON a.usuario_afectado_id = u.id " +
@@ -97,7 +101,10 @@ namespace GameLauncher
                 }
                 dgApelaciones.ItemsSource = lista;
             }
-            catch (Exception ex) { MessageBox.Show("Error cargando apelaciones: " + ex.Message); }
+            catch (Exception ex)
+            {
+                BiTronixMsgBox.Show("Error cargando apelaciones: " + ex.Message, "Error BBDD", BiTronixMsgBox.Type.Error);
+            }
         }
 
         private void DgApelaciones_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -117,15 +124,8 @@ namespace GameLauncher
             }
         }
 
-        private void BtnAceptarApelacion_Click(object sender, RoutedEventArgs e)
-        {
-            ProcesarApelacion(true);
-        }
-
-        private void BtnRechazarApelacion_Click(object sender, RoutedEventArgs e)
-        {
-            ProcesarApelacion(false);
-        }
+        private void BtnAceptarApelacion_Click(object sender, RoutedEventArgs e) => ProcesarApelacion(true);
+        private void BtnRechazarApelacion_Click(object sender, RoutedEventArgs e) => ProcesarApelacion(false);
 
         private void ProcesarApelacion(bool aceptada)
         {
@@ -136,7 +136,6 @@ namespace GameLauncher
             {
                 using (var conn = db.GetConnection())
                 {
-                    // 1. Actualizar estado de la apelación
                     string nuevoEstado = aceptada ? "aceptada" : "rechazada";
                     string queryApelacion = "UPDATE apelaciones SET estado = @estado WHERE id = @id";
                     MySqlCommand cmd = new MySqlCommand(queryApelacion, conn);
@@ -144,7 +143,6 @@ namespace GameLauncher
                     cmd.Parameters.AddWithValue("@id", item.Id);
                     cmd.ExecuteNonQuery();
 
-                    // 2. Si es aceptada -> DESBANEAR AL USUARIO
                     if (aceptada)
                     {
                         string queryDesban = "UPDATE usuarios SET estado_cuenta = 'activo', fin_baneo = NULL, motivo_baneo = NULL WHERE id = @uid";
@@ -157,22 +155,23 @@ namespace GameLauncher
                 string accion = aceptada ? "APELACION_ACEPTADA" : "APELACION_RECHAZADA";
                 LogManager.RegistrarAccion("Admin", accion, $"Usuario: {item.NombreUsuario}. Decisión: {accion}");
 
-                MessageBox.Show(aceptada ? "Usuario perdonado y desbaneado." : "Apelación rechazada. El castigo continúa.");
+                // MENSAJE PERSONALIZADO SEGÚN DECISIÓN
+                if (aceptada)
+                    BiTronixMsgBox.Show("El usuario ha sido perdonado y desbaneado correctamente.", "Apelación Aceptada", BiTronixMsgBox.Type.Success);
+                else
+                    BiTronixMsgBox.Show("La apelación ha sido rechazada. El castigo se mantiene.", "Apelación Rechazada", BiTronixMsgBox.Type.Error);
 
-                // Recargar todo
-                CargarApelaciones();
-                CargarUsuarios();
-                VerificarNotificaciones(); // Actualizar badge
-
-                txtMensajeApelacion.Text = "";
-                btnAceptarApelacion.IsEnabled = false;
-                btnRechazarApelacion.IsEnabled = false;
+                CargarApelaciones(); CargarUsuarios(); VerificarNotificaciones();
+                txtMensajeApelacion.Text = ""; btnAceptarApelacion.IsEnabled = false; btnRechazarApelacion.IsEnabled = false;
             }
-            catch (Exception ex) { MessageBox.Show("Error procesando: " + ex.Message); }
+            catch (Exception ex)
+            {
+                BiTronixMsgBox.Show("Error procesando: " + ex.Message, "Error", BiTronixMsgBox.Type.Error);
+            }
         }
 
         // ==========================================
-        // CÓDIGO EXISTENTE (USUARIOS Y LOGS)
+        // GESTIÓN DE USUARIOS
         // ==========================================
 
         private void CargarUsuarios()
@@ -251,16 +250,36 @@ namespace GameLauncher
             {
                 using (var conn = db.GetConnection())
                 {
+                    // VALIDACIÓN DE DUPLICADOS CON MENSAJE BONITO
                     if (string.IsNullOrEmpty(txtId.Text))
                     {
+                        MySqlCommand checkCmd = new MySqlCommand("SELECT COUNT(*) FROM usuarios WHERE nombre_usuario = @u", conn);
+                        checkCmd.Parameters.AddWithValue("@u", nombre);
+                        if ((long)checkCmd.ExecuteScalar() > 0)
+                        {
+                            BiTronixMsgBox.Show($"El usuario '{nombre}' ya existe.\nPor favor, elige otro nombre.", "Nombre Duplicado", BiTronixMsgBox.Type.Warning);
+                            return;
+                        }
+                    }
+
+                    if (string.IsNullOrEmpty(txtId.Text))
+                    {
+                        // INSERTAR
+                        string passwordHash = string.IsNullOrEmpty(txtPassword.Password)
+                            ? "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4" // Default 1234
+                            : GenerarHash(txtPassword.Password);
+
                         string query = "INSERT INTO usuarios (nombre_usuario, email, rol, estado_cuenta, motivo_baneo, fin_baneo, password_hash, fecha_registro) VALUES (@nom, @mail, @rol, @est, @mot, @fin, @pass, NOW())";
                         MySqlCommand cmd = new MySqlCommand(query, conn);
-                        cmd.Parameters.AddWithValue("@nom", nombre); cmd.Parameters.AddWithValue("@mail", email); cmd.Parameters.AddWithValue("@rol", rol); cmd.Parameters.AddWithValue("@est", estado); cmd.Parameters.AddWithValue("@mot", motivo); cmd.Parameters.AddWithValue("@fin", finBaneo); cmd.Parameters.AddWithValue("@pass", "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4");
+                        cmd.Parameters.AddWithValue("@nom", nombre); cmd.Parameters.AddWithValue("@mail", email); cmd.Parameters.AddWithValue("@rol", rol); cmd.Parameters.AddWithValue("@est", estado); cmd.Parameters.AddWithValue("@mot", motivo); cmd.Parameters.AddWithValue("@fin", finBaneo);
+                        cmd.Parameters.AddWithValue("@pass", passwordHash);
+
                         cmd.ExecuteNonQuery();
                         LogManager.RegistrarAccion("Admin", "CREAR", $"Alta de usuario: {nombre} ({rol})");
                     }
                     else
                     {
+                        // ACTUALIZAR
                         string query = "UPDATE usuarios SET nombre_usuario=@nom, email=@mail, rol=@rol, estado_cuenta=@est, motivo_baneo=@mot";
                         if (finBaneo != null) query += ", fin_baneo=@fin"; else if (estado == "activo") query += ", fin_baneo=NULL";
                         query += " WHERE id=@id";
@@ -268,27 +287,61 @@ namespace GameLauncher
                         cmd.Parameters.AddWithValue("@id", txtId.Text); cmd.Parameters.AddWithValue("@nom", nombre); cmd.Parameters.AddWithValue("@mail", email); cmd.Parameters.AddWithValue("@rol", rol); cmd.Parameters.AddWithValue("@est", estado); cmd.Parameters.AddWithValue("@mot", motivo); if (finBaneo != null) cmd.Parameters.AddWithValue("@fin", finBaneo);
                         cmd.ExecuteNonQuery();
 
+                        // CAMBIO DE CONTRASEÑA ENCRIPTADA
                         List<string> cambios = new List<string>();
+                        if (!string.IsNullOrEmpty(txtPassword.Password))
+                        {
+                            string nuevoHash = GenerarHash(txtPassword.Password);
+                            string queryPass = "UPDATE usuarios SET password_hash = @ph WHERE id = @id";
+                            MySqlCommand cmdPass = new MySqlCommand(queryPass, conn);
+                            cmdPass.Parameters.AddWithValue("@ph", nuevoHash);
+                            cmdPass.Parameters.AddWithValue("@id", txtId.Text);
+                            cmdPass.ExecuteNonQuery();
+                            cambios.Add("Contraseña RESETEADA");
+                        }
+
                         if (usuarioOriginalSnapshot.Nombre != nombre) cambios.Add($"Nombre: {usuarioOriginalSnapshot.Nombre}->{nombre}");
                         if (usuarioOriginalSnapshot.Rol != rol) cambios.Add($"Rol: {usuarioOriginalSnapshot.Rol}->{rol}");
                         if (usuarioOriginalSnapshot.EstadoCuenta != estado) cambios.Add($"Estado: {usuarioOriginalSnapshot.EstadoCuenta}->{estado}{textoDuracionLog}");
+
                         string detallesLog = cambios.Count > 0 ? string.Join(", ", cambios) : "Actualización sin cambios críticos";
                         LogManager.RegistrarAccion("Admin", "MODIFICAR", $"Usuario ID {txtId.Text}: {detallesLog}");
                     }
                 }
-                MessageBox.Show("Datos guardados."); CargarUsuarios(); LimpiarFormulario();
+
+                // MENSAJE DE ÉXITO
+                BiTronixMsgBox.Show("Los datos han sido guardados correctamente en la base de datos.", "Operación Exitosa", BiTronixMsgBox.Type.Success);
+
+                CargarUsuarios(); LimpiarFormulario();
             }
-            catch (Exception ex) { MessageBox.Show("Error: " + ex.Message); }
+            catch (Exception ex)
+            {
+                BiTronixMsgBox.Show("Error al guardar: " + ex.Message, "Error Crítico", BiTronixMsgBox.Type.Error);
+            }
         }
 
         private void BtnEliminar_Click(object sender, RoutedEventArgs e)
         {
             if (string.IsNullOrEmpty(txtId.Text)) return;
-            if (MessageBox.Show("¿Eliminar usuario?", "Confirmar", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+
+            // MENSAJE DE CONFIRMACIÓN MORADO (SÍ/NO)
+            if (BiTronixMsgBox.Show("¿Seguro que quieres eliminar a este usuario permanentemente?\nEsta acción no se puede deshacer.", "Confirmar Borrado", BiTronixMsgBox.Type.Confirmation, BiTronixMsgBox.Buttons.YesNo))
             {
-                using (var conn = db.GetConnection()) { new MySqlCommand("DELETE FROM usuarios WHERE id=" + txtId.Text, conn).ExecuteNonQuery(); }
-                LogManager.RegistrarAccion("Admin", "ELIMINAR", $"Borró usuario ID {txtId.Text}");
-                CargarUsuarios(); LimpiarFormulario();
+                try
+                {
+                    using (var conn = db.GetConnection())
+                    {
+                        new MySqlCommand("DELETE FROM usuarios WHERE id=" + txtId.Text, conn).ExecuteNonQuery();
+                    }
+                    LogManager.RegistrarAccion("Admin", "ELIMINAR", $"Borró usuario ID {txtId.Text}");
+                    CargarUsuarios();
+                    LimpiarFormulario();
+                    BiTronixMsgBox.Show("Usuario eliminado.", "Info", BiTronixMsgBox.Type.Info);
+                }
+                catch (Exception ex)
+                {
+                    BiTronixMsgBox.Show("Error al eliminar: " + ex.Message, "Error", BiTronixMsgBox.Type.Error);
+                }
             }
         }
 
@@ -304,9 +357,59 @@ namespace GameLauncher
             try { using (var conn = db.GetConnection()) { MySqlCommand cmd = new MySqlCommand("SELECT * FROM audit_logs ORDER BY fecha DESC", conn); using (MySqlDataReader reader = cmd.ExecuteReader()) { while (reader.Read()) { logs.Add(new LogEntry { Id = reader.GetInt32("id"), UsuarioResponsable = reader.GetString("usuario_responsable"), Accion = reader.GetString("accion"), Detalles = reader.GetString("detalles"), Fecha = reader.GetDateTime("fecha").ToString("yyyy-MM-dd HH:mm:ss") }); } } } dgAuditoria.ItemsSource = logs; } catch { }
         }
         private void BtnRefrescarLogs_Click(object sender, RoutedEventArgs e) => CargarLogs();
-        private void BtnExportExcel_Click(object sender, RoutedEventArgs e) { try { string ruta = "Reporte_Logs.csv"; using (StreamWriter sw = new StreamWriter(ruta)) { sw.WriteLine("ID;FECHA;RESPONSABLE;ACCION;DETALLES"); foreach (LogEntry log in dgAuditoria.Items) sw.WriteLine($"{log.Id};{log.Fecha};{log.UsuarioResponsable};{log.Accion};{log.Detalles}"); } MessageBox.Show($"CSV generado en: {Path.GetFullPath(ruta)}"); } catch (Exception ex) { MessageBox.Show("Error: " + ex.Message); } }
-        private void BtnExportPDF_Click(object sender, RoutedEventArgs e) { try { string ruta = "Reporte_BiTronix.txt"; using (StreamWriter sw = new StreamWriter(ruta)) { sw.WriteLine("=== BITRONIX - LOGS ==="); foreach (LogEntry log in dgAuditoria.Items) { sw.WriteLine($"[{log.Fecha}] {log.UsuarioResponsable}: {log.Accion}"); sw.WriteLine($"   > {log.Detalles}"); sw.WriteLine("---"); } } System.Diagnostics.Process.Start("notepad.exe", ruta); } catch (Exception ex) { MessageBox.Show("Error: " + ex.Message); } }
+
+        private void BtnExportExcel_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                string ruta = "Reporte_Logs.csv";
+                using (StreamWriter sw = new StreamWriter(ruta))
+                {
+                    sw.WriteLine("ID;FECHA;RESPONSABLE;ACCION;DETALLES");
+                    foreach (LogEntry log in dgAuditoria.Items) sw.WriteLine($"{log.Id};{log.Fecha};{log.UsuarioResponsable};{log.Accion};{log.Detalles}");
+                }
+                BiTronixMsgBox.Show($"CSV generado en:\n{Path.GetFullPath(ruta)}", "Exportación Exitosa", BiTronixMsgBox.Type.Success);
+            }
+            catch (Exception ex) { BiTronixMsgBox.Show("Error: " + ex.Message, "Error", BiTronixMsgBox.Type.Error); }
+        }
+
+        private void BtnExportPDF_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                string ruta = "Reporte_BiTronix.txt";
+                using (StreamWriter sw = new StreamWriter(ruta))
+                {
+                    sw.WriteLine("=== BITRONIX - LOGS ===");
+                    foreach (LogEntry log in dgAuditoria.Items)
+                    {
+                        sw.WriteLine($"[{log.Fecha}] {log.UsuarioResponsable}: {log.Accion}");
+                        sw.WriteLine($"   > {log.Detalles}");
+                        sw.WriteLine("---");
+                    }
+                }
+                BiTronixMsgBox.Show($"Informe generado en:\n{Path.GetFullPath(ruta)}", "Exportación Exitosa", BiTronixMsgBox.Type.Success);
+                System.Diagnostics.Process.Start("notepad.exe", ruta);
+            }
+            catch (Exception ex) { BiTronixMsgBox.Show("Error: " + ex.Message, "Error", BiTronixMsgBox.Type.Error); }
+        }
+
         private void BtnCerrar_Click(object sender, RoutedEventArgs e) => this.Close();
         private void Window_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e) { if (e.ButtonState == System.Windows.Input.MouseButtonState.Pressed) this.DragMove(); }
+
+        // --- ENCRIPTACIÓN PARA GUARDAR PASS ---
+        private string GenerarHash(string textoPlano)
+        {
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(textoPlano));
+                StringBuilder builder = new StringBuilder();
+                for (int i = 0; i < bytes.Length; i++)
+                {
+                    builder.Append(bytes[i].ToString("x2"));
+                }
+                return builder.ToString();
+            }
+        }
     }
 }
