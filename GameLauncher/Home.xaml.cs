@@ -19,6 +19,9 @@ namespace GameLauncher
 
     public partial class Home : Window
     {
+        // --- NUEVO: GUARDAMOS EL USUARIO ACTUAL (EL PASAPORTE) ---
+        private Usuario usuarioActual;
+
         private List<Juego> biblioteca = new List<Juego>();
         private bool esVistaCuadricula = false;
         private string criterioOrden = "Nombre";
@@ -41,14 +44,22 @@ namespace GameLauncher
         private Brush textoBlanco = Brushes.White;
         private Brush textoGris = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#AAAAAA"));
 
-        public Home(string nombreUsuario = "Gamer")
+        // --- CONSTRUCTOR ACTUALIZADO: RECIBE EL OBJETO USUARIO ---
+        public Home(Usuario usuario)
         {
             InitializeComponent();
+            this.usuarioActual = usuario; // Guardamos quien ha entrado
+
             ConfigurarVentanaInicial();
             CargarDatosFalsos();
             CargarAmigos();
 
-            if (txtNombrePerfil != null) txtNombrePerfil.Text = nombreUsuario;
+            // Ponemos su nombre en la barra de arriba
+            if (txtNombrePerfil != null) txtNombrePerfil.Text = usuarioActual.Nombre;
+
+            // --- SEGURIDAD VISUAL (RBAC) ---
+            // Aquí decidimos si el botón de Admin aparece o no
+            ConfigurarPermisosRol();
 
             // Iniciar Carrusel
             timerCarrusel = new DispatcherTimer();
@@ -66,7 +77,30 @@ namespace GameLauncher
             RefrescarInterfaz();
         }
 
-        public Home() : this("Gamer Invitado") { }
+        // Constructor por defecto (por si acaso) crea un usuario invitado
+        public Home() : this(new Usuario { Nombre = "Invitado", Rol = "usuario" }) { }
+
+        // --- LÓGICA DE ROLES ---
+        private void ConfigurarPermisosRol()
+        {
+            // Solo si es ADMIN mostramos el botón dorado
+            if (usuarioActual != null && usuarioActual.EsAdmin())
+            {
+                if (btnAdmin != null) btnAdmin.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                if (btnAdmin != null) btnAdmin.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        // --- EVENTO DEL BOTÓN ADMIN ---
+        private void BtnAdmin_Click(object sender, RoutedEventArgs e)
+        {
+            // AHORA SÍ ABRIMOS LA VENTANA DE VERDAD
+            AdminWindow adminWindow = new AdminWindow();
+            adminWindow.ShowDialog(); // ShowDialog es mejor porque bloquea la ventana de atrás
+        }
 
         private void ConfigurarVentanaInicial()
         {

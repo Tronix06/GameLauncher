@@ -122,11 +122,11 @@ namespace GameLauncher
             target.BeginAnimation(UIElement.OpacityProperty, anim);
         }
 
-        // --- LOGIN (CORREGIDO) ---
+        
+        // --- LOGIN INTELIGENTE V2.0 (SaaS & Roles) ---
         private void BtnLogin_Click(object sender, RoutedEventArgs e)
         {
             string usuario = txtUsuarioLogin.Text;
-            // Cogemos la pass de la caja visible o de la oculta según cuál esté activa
             string pass = txtPasswordLoginVisible.Visibility == Visibility.Visible ? txtPasswordLoginVisible.Text : txtPasswordLogin.Password;
 
             if (string.IsNullOrWhiteSpace(usuario) || string.IsNullOrWhiteSpace(pass))
@@ -136,21 +136,44 @@ namespace GameLauncher
                 return;
             }
 
+            // Llamamos al nuevo validador inteligente
             string resultado = gestor.ValidarLogin(usuario, pass);
 
             if (resultado == "OK")
             {
-                lblMensajeLogin.Text = "✅ Conectando a BiTronix...";
-                lblMensajeLogin.Foreground = Brushes.LightGreen;
+                // 1. Recuperamos el "Pasaporte Completo" (Rol, ID, Email...)
+                Usuario datosUsuario = gestor.ObtenerDatosUsuario(usuario);
 
-                // >>> CORRECCIÓN: AQUÍ GUARDAMOS EL USUARIO SI EL CHECKBOX ESTÁ MARCADO <<<
-                GuardarPreferencias(usuario);
+                if (datosUsuario != null)
+                {
+                    lblMensajeLogin.Text = "✅ Conectando...";
+                    lblMensajeLogin.Foreground = Brushes.LightGreen;
 
-                // Pasamos el usuario a la Home
-                Home home = new Home(usuario);
-                home.Show();
+                    GuardarPreferencias(usuario);
+
+                    // 2. Pasamos el OBJETO COMPLETO a la Home (No solo el string)
+                    Home home = new Home(datosUsuario);
+                    home.Show();
+                    this.Close();
+                }
+            }
+            // --- MANEJO DE ERRORES PROFESIONALES ---
+            // ... (dentro de BtnLogin_Click) ...
+
+            else if (resultado == "CUENTA_SUSPENDIDA" || resultado == "CUENTA_BANEADA_TEMP")
+            {
+                // 1. Recuperamos los datos del usuario para saber por qué está castigado
+                Usuario datosBaneado = gestor.ObtenerDatosUsuario(usuario);
+
+                // 2. Abrimos la VENTANA PERSONALIZADA DE CASTIGO
+                CastigoWindow ventanaCastigo = new CastigoWindow(datosBaneado);
+                ventanaCastigo.Show();
+
+                // 3. Cerramos el Login
                 this.Close();
             }
+
+            // ... (resto de errores NO_EXISTE, PASS_INCORRECTA siguen igual) ...
             else if (resultado == "NO_EXISTE")
             {
                 lblMensajeLogin.Text = "❌ Usuario no encontrado";
@@ -163,7 +186,7 @@ namespace GameLauncher
             }
             else
             {
-                lblMensajeLogin.Text = "⛔ Cuenta bloqueada temporalmente";
+                lblMensajeLogin.Text = "⚠️ Error de conexión";
                 lblMensajeLogin.Foreground = Brushes.OrangeRed;
             }
         }

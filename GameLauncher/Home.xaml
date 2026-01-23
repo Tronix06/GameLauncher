@@ -271,6 +271,24 @@
                     </Border>
 
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,10,0">
+
+                        <Button x:Name="btnAdmin" Click="BtnAdmin_Click" Visibility="Collapsed" Margin="0,0,20,0" Cursor="Hand" Background="Transparent" BorderThickness="0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}" BorderBrush="#FFD700" BorderThickness="1" CornerRadius="5" Padding="10,5">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="🛡️" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="PANEL ADMIN" Foreground="#FFD700" FontWeight="Bold" VerticalAlignment="Center" FontSize="11"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#1AFFD700"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
                         <Button Style="{StaticResource BotonPerfil}" Click="BtnAbrirPerfil_Click" ToolTip="Mi Perfil">
                             <TextBlock Text="Usuario" x:Name="txtNombrePerfil" Foreground="White" VerticalAlignment="Center" FontWeight="Bold"/>
                         </Button>

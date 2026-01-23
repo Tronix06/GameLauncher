@@ -1,0 +1,106 @@
+﻿<Window x:Class="GameLauncher.CastigoWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Acceso Denegado" Height="500" Width="400"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize">
+
+    <Window.Resources>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#202020"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="#444"/>
+            <Setter Property="Padding" Value="5"/>
+        </Style>
+    </Window.Resources>
+
+    <Border Background="#101010" CornerRadius="10" BorderBrush="#FF4444" BorderThickness="2" MouseLeftButtonDown="Window_MouseLeftButtonDown">
+        <Grid Margin="20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,0,0,20">
+                <TextBlock Text="⛔" FontSize="50" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                <TextBlock Text="ACCESO DENEGADO" Foreground="#FF4444" FontSize="24" FontWeight="Black" HorizontalAlignment="Center"/>
+                <TextBlock Text="Tu cuenta ha sido suspendida" Foreground="#AAAAAA" FontSize="14" HorizontalAlignment="Center"/>
+            </StackPanel>
+
+            <Border Grid.Row="1" Background="#220000" CornerRadius="5" Padding="15" Margin="0,0,0,20" BorderBrush="#550000" BorderThickness="1">
+                <StackPanel>
+                    <Grid Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="MOTIVO:" Foreground="#FF8888" FontWeight="Bold" Margin="0,0,10,0"/>
+                        <TextBlock x:Name="txtMotivo" Text="Comportamiento tóxico" Grid.Column="1" Foreground="White" TextWrapping="Wrap"/>
+                    </Grid>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="TIEMPO RESTANTE:" Foreground="#FF8888" FontWeight="Bold" Margin="0,0,10,0"/>
+                        <TextBlock x:Name="txtTiempo" Text="23 Horas, 12 Minutos" Grid.Column="1" Foreground="White" FontWeight="Bold"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <StackPanel Grid.Row="2">
+                <TextBlock Text="SOLICITUD DE APELACIÓN" Foreground="#00C3FF" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Text="Si crees que esto es un error, escribe un mensaje a los administradores:" Foreground="#666" FontSize="11" Margin="0,0,0,10" TextWrapping="Wrap"/>
+
+                <TextBox x:Name="txtApelacion" Height="100" TextWrapping="Wrap" AcceptsReturn="True" VerticalContentAlignment="Top" 
+                         ToolTip="Escribe aquí tu defensa..."/>
+            </StackPanel>
+
+            <Grid Grid.Row="3" Margin="0,20,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="10"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Button x:Name="btnSalir" Grid.Column="0" Content="VOLVER AL LOGIN" Height="40" Background="Transparent" Foreground="#888888" BorderBrush="#444" BorderThickness="1" 
+        Click="BtnSalir_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <Button x:Name="btnEnviar" Grid.Column="2" Content="ENVIAR APELACIÓN" Height="40" Background="#0074E0" Foreground="White" FontWeight="Bold" BorderThickness="0"
+                        Click="BtnEnviarApelacion_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="borde" Background="{TemplateBinding Background}" CornerRadius="5">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="borde" Property="Background" Value="#005BB5"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="borde" Property="Background" Value="#333"/>
+                                    <Setter Property="Foreground" Value="#666"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>
