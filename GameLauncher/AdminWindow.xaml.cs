@@ -237,6 +237,13 @@ namespace GameLauncher
             string nombre = txtNombre.Text; string email = txtEmail.Text; string rol = cmbRol.Text; string estado = cmbEstado.Text; string motivo = txtMotivo.Text;
             DateTime? finBaneo = null; string textoDuracionLog = "";
 
+            // VALIDACIÓN CAMPOS NO VACÍOS
+            if (string.IsNullOrWhiteSpace(nombre) || string.IsNullOrWhiteSpace(email))
+            {
+                BiTronixMsgBox.Show("Los campos 'Nombre' y 'Email' son obligatorios.", "Campos Vacíos", BiTronixMsgBox.Type.Warning);
+                return;
+            }
+
             if (cmbDuracionBaneo.SelectedIndex > 0)
             {
                 string duracion = cmbDuracionBaneo.Text; textoDuracionLog = $" ({duracion})";
