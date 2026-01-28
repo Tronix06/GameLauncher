@@ -14,6 +14,7 @@ namespace GameLauncher
         private List<Usuario> listaUsuarios = new List<Usuario>();
         private DatabaseConnection db = new DatabaseConnection();
         private Usuario usuarioOriginalSnapshot;
+        private Usuario adminLogueado; // Variable para saber quién está logueado
 
         // Clase auxiliar para la lista de apelaciones
         public class ApelacionEntry
@@ -26,15 +27,18 @@ namespace GameLauncher
             public string Fecha { get; set; }
         }
 
-        public AdminWindow()
+        // CONSTRUCTOR MODIFICADO: Recibe el usuario logueado
+        public AdminWindow(Usuario admin)
         {
             InitializeComponent();
+            this.adminLogueado = admin; // Guardamos quién es el admin actual
+
             CargarUsuarios();
             CargarLogs();
             CargarApelaciones();
             VerificarNotificaciones();
 
-            txtAdminUser.Text = " | Sesión iniciada";
+            txtAdminUser.Text = $" | Sesión iniciada como: {admin.Nombre} (ID: {admin.Id})";
         }
 
         // --- SISTEMA DE NOTIFICACIONES ---
@@ -50,13 +54,11 @@ namespace GameLauncher
 
                     if (count > 0)
                     {
-                        // 1. Mostrar Popup Personalizado (Amarillo/Warning)
                         BiTronixMsgBox.Show(
                             $"Tienes {count} apelaciones pendientes de revisión.\nPor favor, ve a la pestaña de Apelaciones.",
                             "Atención Admin",
                             BiTronixMsgBox.Type.Warning);
 
-                        // 2. Encender el Badge Rojo en la pestaña
                         badgeNotificacion.Visibility = Visibility.Visible;
                         txtNumApelaciones.Text = count.ToString();
                     }
@@ -67,6 +69,48 @@ namespace GameLauncher
                 }
             }
             catch { }
+        }
+
+        // --- MÉTODO PARA GESTIONAR EL COMBO DE ROLES Y PERMISOS ---
+        private void ConfigurarPermisosRol(Usuario usuarioSeleccionado)
+        {
+            cmbRol.Items.Clear();
+            cmbRol.Items.Add(new ComboBoxItem { Content = "usuario" });
+
+            // 3. LÓGICA DE SUPERADMIN (ID 1)
+            if (adminLogueado.Id == 1)
+            {
+                cmbRol.Items.Add(new ComboBoxItem { Content = "admin" });
+                cmbRol.IsEnabled = true;
+
+                // Anti-suicidio de Rol: No me puedo quitar el rol admin a mí mismo
+                if (usuarioSeleccionado != null && usuarioSeleccionado.Id == 1)
+                {
+                    cmbRol.IsEnabled = false;
+                }
+            }
+            // 4. LÓGICA DE ADMIN MORTAL (ID != 1)
+            else
+            {
+                if (usuarioSeleccionado != null)
+                {
+                    if (usuarioSeleccionado.Rol == "admin")
+                    {
+                        // Veo que es admin, pero no puedo tocarlo
+                        cmbRol.Items.Add(new ComboBoxItem { Content = "admin" });
+                        cmbRol.Text = "admin";
+                        cmbRol.IsEnabled = false;
+                    }
+                    else
+                    {
+                        cmbRol.IsEnabled = true;
+                    }
+                }
+                else
+                {
+                    cmbRol.IsEnabled = true;
+                }
+            }
         }
 
         // --- GESTIÓN DE APELACIONES ---
@@ -155,7 +199,6 @@ namespace GameLauncher
                 string accion = aceptada ? "APELACION_ACEPTADA" : "APELACION_RECHAZADA";
                 LogManager.RegistrarAccion("Admin", accion, $"Usuario: {item.NombreUsuario}. Decisión: {accion}");
 
-                // MENSAJE PERSONALIZADO SEGÚN DECISIÓN
                 if (aceptada)
                     BiTronixMsgBox.Show("El usuario ha sido perdonado y desbaneado correctamente.", "Apelación Aceptada", BiTronixMsgBox.Type.Success);
                 else
@@ -206,15 +249,52 @@ namespace GameLauncher
             catch { }
         }
 
+        // --- SELECCIÓN EN LA TABLA (CON TODAS LAS REGLAS DE SEGURIDAD) ---
         private void DgUsuarios_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             Usuario u = (Usuario)dgUsuarios.SelectedItem;
             if (u != null)
             {
                 txtId.Text = u.Id.ToString(); txtNombre.Text = u.Nombre; txtEmail.Text = u.Email; txtPassword.Password = "";
-                cmbRol.Text = u.Rol; cmbEstado.Text = u.EstadoCuenta; txtMotivo.Text = u.MotivoBaneo; cmbDuracionBaneo.SelectedIndex = 0;
+                cmbEstado.Text = u.EstadoCuenta; txtMotivo.Text = u.MotivoBaneo; cmbDuracionBaneo.SelectedIndex = 0;
                 usuarioOriginalSnapshot = new Usuario { Id = u.Id, Nombre = u.Nombre, Email = u.Email, Rol = u.Rol, EstadoCuenta = u.EstadoCuenta, MotivoBaneo = u.MotivoBaneo };
-                if (u.Id == 1) btnEliminar.IsEnabled = false; else btnEliminar.IsEnabled = true;
+
+                // 1. Configurar Rol según permisos
+                ConfigurarPermisosRol(u);
+                cmbRol.Text = u.Rol;
+
+                // 2. REGLA: NADIE PUEDE BORRAR AL SUPERADMIN (ID 1)
+                if (u.Id == 1) btnEliminar.IsEnabled = false;
+                else btnEliminar.IsEnabled = true;
+
+                // 3. REGLA: ANTI-SUICIDIO (NO PUEDES BANEARTE A TI MISMO)
+                if (u.Id == adminLogueado.Id)
+                {
+                    // Si me selecciono a mí mismo:
+                    cmbEstado.IsEnabled = false;        // No puedo cambiar mi estado
+                    cmbDuracionBaneo.IsEnabled = false; // No puedo ponerme tiempo de baneo
+                }
+                else
+                {
+                    // Si selecciono a otro, se habilitan (salvo que sea el SuperAdmin y yo no lo sea)
+                    cmbEstado.IsEnabled = true;
+                    cmbDuracionBaneo.IsEnabled = true;
+                }
+
+                // 4. REGLA: PROTECCIÓN DE JERARQUÍA (Admin Mortal no toca a SuperAdmin)
+                if (adminLogueado.Id != 1 && u.Id == 1)
+                {
+                    // Bloqueo total
+                    btnGuardar.IsEnabled = false;
+                    btnEliminar.IsEnabled = false;
+                    cmbEstado.IsEnabled = false;
+                    cmbDuracionBaneo.IsEnabled = false;
+                    BiTronixMsgBox.Show("No tienes permisos para editar al SuperAdmin.", "Acceso Restringido", BiTronixMsgBox.Type.Warning);
+                }
+                else
+                {
+                    btnGuardar.IsEnabled = true;
+                }
             }
         }
 
@@ -244,6 +324,16 @@ namespace GameLauncher
                 return;
             }
 
+            // VALIDACIÓN DE SEGURIDAD EXTRA: NO BANEARSE A UNO MISMO
+            if (!string.IsNullOrEmpty(txtId.Text) && int.Parse(txtId.Text) == adminLogueado.Id)
+            {
+                if (estado == "baneado" || estado == "suspendido")
+                {
+                    BiTronixMsgBox.Show("¡No puedes banearte a ti mismo!\nOperación cancelada por seguridad.", "Auto-Baneo Detectado", BiTronixMsgBox.Type.Error);
+                    return;
+                }
+            }
+
             if (cmbDuracionBaneo.SelectedIndex > 0)
             {
                 string duracion = cmbDuracionBaneo.Text; textoDuracionLog = $" ({duracion})";
@@ -257,7 +347,7 @@ namespace GameLauncher
             {
                 using (var conn = db.GetConnection())
                 {
-                    // VALIDACIÓN DE DUPLICADOS CON MENSAJE BONITO
+                    // VALIDACIÓN DE DUPLICADOS
                     if (string.IsNullOrEmpty(txtId.Text))
                     {
                         MySqlCommand checkCmd = new MySqlCommand("SELECT COUNT(*) FROM usuarios WHERE nombre_usuario = @u", conn);
@@ -294,7 +384,7 @@ namespace GameLauncher
                         cmd.Parameters.AddWithValue("@id", txtId.Text); cmd.Parameters.AddWithValue("@nom", nombre); cmd.Parameters.AddWithValue("@mail", email); cmd.Parameters.AddWithValue("@rol", rol); cmd.Parameters.AddWithValue("@est", estado); cmd.Parameters.AddWithValue("@mot", motivo); if (finBaneo != null) cmd.Parameters.AddWithValue("@fin", finBaneo);
                         cmd.ExecuteNonQuery();
 
-                        // CAMBIO DE CONTRASEÑA ENCRIPTADA
+                        // CAMBIO DE CONTRASEÑA
                         List<string> cambios = new List<string>();
                         if (!string.IsNullOrEmpty(txtPassword.Password))
                         {
@@ -316,9 +406,7 @@ namespace GameLauncher
                     }
                 }
 
-                // MENSAJE DE ÉXITO
                 BiTronixMsgBox.Show("Los datos han sido guardados correctamente en la base de datos.", "Operación Exitosa", BiTronixMsgBox.Type.Success);
-
                 CargarUsuarios(); LimpiarFormulario();
             }
             catch (Exception ex)
@@ -353,7 +441,23 @@ namespace GameLauncher
         }
 
         private void BtnLimpiar_Click(object sender, RoutedEventArgs e) => LimpiarFormulario();
-        private void LimpiarFormulario() { txtId.Text = ""; txtNombre.Text = ""; txtEmail.Text = ""; txtPassword.Password = ""; txtMotivo.Text = ""; cmbRol.SelectedIndex = -1; cmbEstado.SelectedIndex = -1; cmbDuracionBaneo.SelectedIndex = 0; dgUsuarios.SelectedItem = null; }
+
+        private void LimpiarFormulario()
+        {
+            txtId.Text = ""; txtNombre.Text = ""; txtEmail.Text = ""; txtPassword.Password = ""; txtMotivo.Text = "";
+            cmbRol.SelectedIndex = -1; cmbEstado.SelectedIndex = -1; cmbDuracionBaneo.SelectedIndex = 0;
+            dgUsuarios.SelectedItem = null;
+            usuarioOriginalSnapshot = null;
+
+            // Configurar para creación (Desbloquear todo por si estaba bloqueado)
+            ConfigurarPermisosRol(null);
+
+            // IMPORTANTE: Reactivar combos de estado por si se bloquearon al seleccionarse a uno mismo
+            cmbEstado.IsEnabled = true;
+            cmbDuracionBaneo.IsEnabled = true;
+            btnGuardar.IsEnabled = true;
+        }
+
         private void TxtBuscar_TextChanged(object sender, TextChangedEventArgs e) { if (string.IsNullOrWhiteSpace(txtBuscar.Text)) dgUsuarios.ItemsSource = listaUsuarios; else dgUsuarios.ItemsSource = listaUsuarios.FindAll(u => u.Nombre.ToLower().Contains(txtBuscar.Text.ToLower())); }
         private void BtnRefrescar_Click(object sender, RoutedEventArgs e) { CargarUsuarios(); txtBuscar.Text = ""; }
 

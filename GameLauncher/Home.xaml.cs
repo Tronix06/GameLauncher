@@ -97,9 +97,9 @@ namespace GameLauncher
         // --- EVENTO DEL BOTÓN ADMIN ---
         private void BtnAdmin_Click(object sender, RoutedEventArgs e)
         {
-            // AHORA SÍ ABRIMOS LA VENTANA DE VERDAD
-            AdminWindow adminWindow = new AdminWindow();
-            adminWindow.ShowDialog(); // ShowDialog es mejor porque bloquea la ventana de atrás
+            // AHORA PASAMOS EL USUARIO ACTUAL AL CONSTRUCTOR
+            AdminWindow adminWindow = new AdminWindow(usuarioActual);
+            adminWindow.ShowDialog();
         }
 
         private void ConfigurarVentanaInicial()
