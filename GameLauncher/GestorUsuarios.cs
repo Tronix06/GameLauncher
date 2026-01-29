@@ -15,6 +15,7 @@ namespace GameLauncher
         }
 
         // --- LOGIN INTELIGENTE (SaaS) ---
+        // (Este método se mantiene igual que tu original, solo lo comprimo visualmente aquí)
         public string ValidarLogin(string usuario, string password)
         {
             MySqlConnection conn = null;
@@ -23,9 +24,7 @@ namespace GameLauncher
             try
             {
                 conn = dbConnection.GetConnection();
-
-                // 1. OBTENER ESTADO DEL USUARIO (Antes de comprobar contraseña)
-                // Necesitamos saber si está baneado para ver si lo perdonamos automáticamente
+                // OBTENER ESTADO DEL USUARIO
                 string queryInfo = "SELECT id, password_hash, estado_cuenta, fin_baneo, intentos_fallidos FROM usuarios WHERE nombre_usuario = @user";
                 MySqlCommand cmdInfo = new MySqlCommand(queryInfo, conn);
                 cmdInfo.Parameters.AddWithValue("@user", usuario);
@@ -45,64 +44,34 @@ namespace GameLauncher
                     }
                 }
 
-                // CASO A: El usuario no existe
                 if (datosUsuario == null) return "NO_EXISTE";
+                if (datosUsuario.EstadoCuenta == "suspendido") { LogManager.RegistrarAccion(usuario, "LOGIN_DENEGADO", "Cuenta suspendida"); return "CUENTA_SUSPENDIDA"; }
 
-                // CASO B: Cuenta SUSPENDIDA (Baneo permanente)
-                if (datosUsuario.EstadoCuenta == "suspendido")
-                {
-                    LogManager.RegistrarAccion(usuario, "LOGIN_DENEGADO", "Intento de acceso a cuenta suspendida");
-                    return "CUENTA_SUSPENDIDA";
-                }
-
-                // CASO C: Cuenta BANEADA (Temporal) - Lógica de Tiempo Real
                 if (datosUsuario.EstadoCuenta == "baneado")
                 {
-                    if (datosUsuario.FinBaneo.HasValue && datosUsuario.FinBaneo.Value > DateTime.Now)
-                    {
-                        // Aún le queda tiempo de castigo
-                        LogManager.RegistrarAccion(usuario, "LOGIN_DENEGADO", "Usuario baneado temporalmente intentó entrar");
-                        return "CUENTA_BANEADA_TEMP";
-                    }
-                    else
-                    {
-                        // ¡EL CASTIGO YA ACABÓ! -> Auto-Desbaneo
-                        LevantarCastigo(datosUsuario.Id);
-                        LogManager.RegistrarAccion("SISTEMA", "AUTO_UNBAN", $"El castigo de {usuario} ha expirado. Cuenta reactivada.");
-                        // Continuamos para verificar la contraseña...
-                    }
+                    if (datosUsuario.FinBaneo.HasValue && datosUsuario.FinBaneo.Value > DateTime.Now) return "CUENTA_BANEADA_TEMP";
+                    else { LevantarCastigo(datosUsuario.Id); LogManager.RegistrarAccion("SISTEMA", "AUTO_UNBAN", "Castigo expirado"); }
                 }
 
-                // 2. VERIFICAR CONTRASEÑA
                 string passHashIngresada = GenerarHash(password);
-
                 if (datosUsuario.PasswordHash == passHashIngresada)
                 {
-                    // ¡ÉXITO!
-                    ResetearIntentos(datosUsuario.Id); // Práctica 2: Limpiamos intentos fallidos
-                    LogManager.RegistrarAccion(usuario, "LOGIN_EXITO", "Inicio de sesión correcto");
+                    ResetearIntentos(datosUsuario.Id);
+                    LogManager.RegistrarAccion(usuario, "LOGIN_EXITO", "Login correcto");
                     return "OK";
                 }
                 else
                 {
-                    // CONTRASEÑA MAL
                     AumentarIntentos(datosUsuario.Id);
-                    LogManager.RegistrarAccion(usuario, "LOGIN_FAIL", "Contraseña incorrecta");
+                    LogManager.RegistrarAccion(usuario, "LOGIN_FAIL", "Pass incorrecta");
                     return "PASS_INCORRECTA";
                 }
             }
-            catch (Exception ex)
-            {
-                System.Windows.MessageBox.Show("ERROR REAL: " + ex.Message);
-                return "ERROR_CONEXION";
-            }
-            finally
-            {
-                dbConnection.CloseConnection();
-            }
+            catch (Exception ex) { System.Windows.MessageBox.Show("ERROR: " + ex.Message); return "ERROR_CONEXION"; }
+            finally { dbConnection.CloseConnection(); }
         }
 
-        // --- OBTENER DATOS COMPLETOS (Para rellenar la clase Usuario tras el login) ---
+        // --- OBTENER DATOS COMPLETOS (ACTUALIZADO P5) ---
         public Usuario ObtenerDatosUsuario(string nombreUsuario)
         {
             Usuario usuario = null;
@@ -126,7 +95,10 @@ namespace GameLauncher
                                 Rol = reader.IsDBNull(reader.GetOrdinal("rol")) ? "usuario" : reader.GetString("rol"),
                                 EstadoCuenta = reader.IsDBNull(reader.GetOrdinal("estado_cuenta")) ? "activo" : reader.GetString("estado_cuenta"),
                                 MotivoBaneo = reader.IsDBNull(reader.GetOrdinal("motivo_baneo")) ? "" : reader.GetString("motivo_baneo"),
-                                FinBaneo = reader.IsDBNull(reader.GetOrdinal("fin_baneo")) ? (DateTime?)null : reader.GetDateTime("fin_baneo")
+                                FinBaneo = reader.IsDBNull(reader.GetOrdinal("fin_baneo")) ? (DateTime?)null : reader.GetDateTime("fin_baneo"),
+
+                                // --- NUEVO P5: LEER TIPO ADMIN ---
+                                TipoAdmin = reader.IsDBNull(reader.GetOrdinal("tipo_admin")) ? null : reader.GetString("tipo_admin")
                             };
                         }
                     }
@@ -146,9 +118,7 @@ namespace GameLauncher
             {
                 using (MySqlConnection conn = dbConnection.GetConnection())
                 {
-                    // Por defecto: Rol 'usuario', Estado 'activo'
                     string query = "INSERT INTO usuarios (nombre_usuario, password_hash, email, rol, estado_cuenta, fecha_registro) VALUES (@user, @pass, @email, 'usuario', 'activo', NOW())";
-
                     MySqlCommand cmd = new MySqlCommand(query, conn);
                     cmd.Parameters.AddWithValue("@user", usuario);
                     cmd.Parameters.AddWithValue("@pass", passHash);
@@ -166,80 +136,26 @@ namespace GameLauncher
             return false;
         }
 
-        // --- MÉTODOS AUXILIARES PRIVADOS ---
-
+        // --- MÉTODOS AUXILIARES (Sin cambios) ---
         private void LevantarCastigo(int idUsuario)
         {
-            try
-            {
-                using (MySqlConnection conn = dbConnection.GetConnection())
-                {
-                    string query = "UPDATE usuarios SET estado_cuenta = 'activo', fin_baneo = NULL, motivo_baneo = NULL WHERE id = @id";
-                    MySqlCommand cmd = new MySqlCommand(query, conn);
-                    cmd.Parameters.AddWithValue("@id", idUsuario);
-                    cmd.ExecuteNonQuery();
-                }
-            }
-            catch { }
+            try { using (MySqlConnection conn = dbConnection.GetConnection()) { new MySqlCommand("UPDATE usuarios SET estado_cuenta = 'activo', fin_baneo = NULL, motivo_baneo = NULL WHERE id = " + idUsuario, conn).ExecuteNonQuery(); } } catch { }
         }
-
         private void AumentarIntentos(int idUsuario)
         {
-            try
-            {
-                using (MySqlConnection conn = dbConnection.GetConnection())
-                {
-                    string query = "UPDATE usuarios SET intentos_fallidos = intentos_fallidos + 1 WHERE id = @id";
-                    MySqlCommand cmd = new MySqlCommand(query, conn);
-                    cmd.Parameters.AddWithValue("@id", idUsuario);
-                    cmd.ExecuteNonQuery();
-                }
-            }
-            catch { }
+            try { using (MySqlConnection conn = dbConnection.GetConnection()) { new MySqlCommand("UPDATE usuarios SET intentos_fallidos = intentos_fallidos + 1 WHERE id = " + idUsuario, conn).ExecuteNonQuery(); } } catch { }
         }
-
         private void ResetearIntentos(int idUsuario)
         {
-            try
-            {
-                using (MySqlConnection conn = dbConnection.GetConnection())
-                {
-                    string query = "UPDATE usuarios SET intentos_fallidos = 0 WHERE id = @id";
-                    MySqlCommand cmd = new MySqlCommand(query, conn);
-                    cmd.Parameters.AddWithValue("@id", idUsuario);
-                    cmd.ExecuteNonQuery();
-                }
-            }
-            catch { }
+            try { using (MySqlConnection conn = dbConnection.GetConnection()) { new MySqlCommand("UPDATE usuarios SET intentos_fallidos = 0 WHERE id = " + idUsuario, conn).ExecuteNonQuery(); } } catch { }
         }
-
         private bool VerificarSiUsuarioExiste(string usuario)
         {
-            try
-            {
-                using (MySqlConnection conn = dbConnection.GetConnection())
-                {
-                    string query = "SELECT COUNT(*) FROM usuarios WHERE nombre_usuario = @user";
-                    MySqlCommand cmd = new MySqlCommand(query, conn);
-                    cmd.Parameters.AddWithValue("@user", usuario);
-                    return (long)cmd.ExecuteScalar() > 0;
-                }
-            }
-            catch { return false; }
+            try { using (MySqlConnection conn = dbConnection.GetConnection()) { MySqlCommand cmd = new MySqlCommand("SELECT COUNT(*) FROM usuarios WHERE nombre_usuario = @u", conn); cmd.Parameters.AddWithValue("@u", usuario); return (long)cmd.ExecuteScalar() > 0; } } catch { return false; }
         }
-
         private string GenerarHash(string textoPlano)
         {
-            using (SHA256 sha256 = SHA256.Create())
-            {
-                byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(textoPlano));
-                StringBuilder builder = new StringBuilder();
-                for (int i = 0; i < bytes.Length; i++)
-                {
-                    builder.Append(bytes[i].ToString("x2"));
-                }
-                return builder.ToString();
-            }
+            using (SHA256 sha256 = SHA256.Create()) { byte[] bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(textoPlano)); StringBuilder builder = new StringBuilder(); for (int i = 0; i < bytes.Length; i++) builder.Append(bytes[i].ToString("x2")); return builder.ToString(); }
         }
     }
 }

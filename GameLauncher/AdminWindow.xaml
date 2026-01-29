@@ -125,7 +125,7 @@
                     </Style>
                 </TabControl.Resources>
 
-                <TabItem Header="👥 GESTIÓN DE USUARIOS">
+                <TabItem x:Name="TabUsuarios" Header="👥 GESTIÓN DE USUARIOS">
                     <Grid Margin="0,10,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="2*"/>
@@ -156,6 +156,7 @@
                                     <DataGridTextColumn Header="USUARIO" Binding="{Binding Nombre}" Width="*"/>
                                     <DataGridTextColumn Header="EMAIL" Binding="{Binding Email}" Width="1.5*"/>
                                     <DataGridTextColumn Header="ROL" Binding="{Binding Rol}" Width="80"/>
+                                    <DataGridTextColumn Header="TIPO" Binding="{Binding TipoAdmin}" Width="100"/>
                                     <DataGridTextColumn Header="ESTADO" Binding="{Binding EstadoCuenta}" Width="100"/>
                                 </DataGrid.Columns>
                             </DataGrid>
@@ -178,7 +179,7 @@
                                     <TextBlock Text="Contraseña (Dejar vacío para no cambiar)" Foreground="#AAA" FontSize="11" Margin="0,5,0,2"/>
                                     <PasswordBox x:Name="txtPassword" Height="30" Margin="0,0,0,10" Background="#252525" Foreground="White" BorderThickness="0" Padding="5"/>
 
-                                    <Grid Margin="0,10,0,20">
+                                    <Grid Margin="0,10,0,5">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="10"/>
@@ -186,7 +187,7 @@
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0">
                                             <TextBlock Text="Rol" Foreground="#AAA" FontSize="11" Margin="0,0,0,2"/>
-                                            <ComboBox x:Name="cmbRol">
+                                            <ComboBox x:Name="cmbRol" SelectionChanged="CmbRol_SelectionChanged">
                                                 <ComboBoxItem Content="usuario"/>
                                                 <ComboBoxItem Content="admin"/>
                                             </ComboBox>
@@ -201,10 +202,19 @@
                                         </StackPanel>
                                     </Grid>
 
+                                    <StackPanel x:Name="PanelTipoAdmin" Visibility="Collapsed" Margin="0,0,0,15">
+                                        <TextBlock Text="Permisos de Administrador" Foreground="#FFD700" FontSize="11" FontWeight="Bold" Margin="0,0,0,2"/>
+                                        <ComboBox x:Name="cmbTipoAdmin">
+                                            <ComboBoxItem Content="admin_total" ToolTip="Gestiona Usuarios y Juegos"/>
+                                            <ComboBoxItem Content="admin_usuarios" ToolTip="Solo gestiona Usuarios"/>
+                                            <ComboBoxItem Content="admin_juegos" ToolTip="Solo gestiona Juegos"/>
+                                            <ComboBoxItem Content="superadmin" ToolTip="Acceso TOTAL (Cuidado)"/>
+                                        </ComboBox>
+                                    </StackPanel>
+
                                     <Border Background="#221111" CornerRadius="5" Padding="10" Margin="0,0,0,20" BorderBrush="#550000" BorderThickness="1">
                                         <StackPanel>
                                             <TextBlock Text="⛔ ZONA DE CASTIGO (BANEO)" Foreground="#FF4444" FontWeight="Bold" Margin="0,0,0,10"/>
-
                                             <TextBlock Text="Duración del Baneo" Foreground="#AAA" FontSize="11"/>
                                             <ComboBox x:Name="cmbDuracionBaneo" SelectedIndex="0" SelectionChanged="CmbDuracionBaneo_SelectionChanged">
                                                 <ComboBoxItem Content="Sin cambios / No banear"/>
@@ -213,7 +223,6 @@
                                                 <ComboBoxItem Content="1 Semana"/>
                                                 <ComboBoxItem Content="Indefinido (Hasta 2099)"/>
                                             </ComboBox>
-
                                             <TextBlock Text="Motivo del Castigo" Foreground="#AAA" FontSize="11"/>
                                             <TextBox x:Name="txtMotivo" ToolTip="Escribe aquí el motivo del baneo (Ej: Insultos)"/>
                                         </StackPanel>
@@ -236,6 +245,107 @@
                     </Grid>
                 </TabItem>
 
+                <TabItem x:Name="TabJuegos" Header="🎮 GESTIÓN DE CATÁLOGO">
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*"/>
+                            <ColumnDefinition Width="350"/>
+                        </Grid.ColumnDefinitions>
+
+                        <DockPanel Grid.Column="0" Margin="0,0,20,0">
+                            <Grid DockPanel.Dock="Top" Margin="0,0,0,15">
+                                <Button Content="↻ REFRESCAR JUEGOS" HorizontalAlignment="Right" Width="150" Height="30" Click="BtnRefrescarJuegos_Click" Background="#333" Foreground="White" BorderThickness="0"/>
+                            </Grid>
+                            <DataGrid x:Name="dgJuegos" SelectionChanged="DgJuegos_SelectionChanged">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="ID" Binding="{Binding Id}" Width="50"/>
+                                    <DataGridTextColumn Header="TÍTULO" Binding="{Binding Titulo}" Width="*"/>
+                                    <DataGridTextColumn Header="PRECIO" Binding="{Binding Precio, StringFormat={}{0:C}}" Width="80"/>
+                                    <DataGridTextColumn Header="GÉNERO" Binding="{Binding Genero}" Width="100"/>
+                                    <DataGridCheckBoxColumn Header="VISIBLE" Binding="{Binding EsVisible}" Width="60"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </DockPanel>
+
+                        <Border Grid.Column="1" Background="#181818" CornerRadius="8" Padding="20">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <TextBlock Text="FICHA DEL VIDEOJUEGO" Foreground="#27AE60" FontWeight="Bold" Margin="0,0,0,15"/>
+                                    <TextBox x:Name="txtIdJuego" Visibility="Collapsed"/>
+                                    <TextBlock Text="Título del Juego" Foreground="#AAA" FontSize="11" Margin="0,5,0,2"/>
+                                    <TextBox x:Name="txtTituloJuego" Margin="0,0,0,10"/>
+
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="10"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="Precio (€)" Foreground="#AAA" FontSize="11" Margin="0,0,0,2"/>
+                                            <TextBox x:Name="txtPrecioJuego"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Género" Foreground="#AAA" FontSize="11" Margin="0,0,0,2"/>
+                                            <ComboBox x:Name="cmbGeneroJuego">
+                                                <ComboBoxItem Content="Acción"/>
+                                                <ComboBoxItem Content="Aventura"/>
+                                                <ComboBoxItem Content="RPG"/>
+                                                <ComboBoxItem Content="Estrategia"/>
+                                                <ComboBoxItem Content="Deportes"/>
+                                                <ComboBoxItem Content="MOBA"/>
+                                                <ComboBoxItem Content="Shooter"/>
+                                                <ComboBoxItem Content="Terror"/>
+                                            </ComboBox>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <TextBlock Text="Imagen de Portada (Cuadrada)" Foreground="#AAA" FontSize="11" Margin="0,5,0,2"/>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="40"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="txtImagenJuego" ToolTip="URL web o nombre de archivo local"/>
+                                        <Button Grid.Column="1" Content="..." Click="BtnBuscarImagen_Click" Background="#333" Foreground="White" Margin="5,0,0,0"/>
+                                    </Grid>
+
+                                    <TextBlock Text="Imagen Banner (Panorámica)" Foreground="#AAA" FontSize="11" Margin="0,5,0,2"/>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="40"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="txtBannerJuego" ToolTip="URL web o nombre de archivo local para el fondo"/>
+                                        <Button Grid.Column="1" Content="..." Click="BtnBuscarBanner_Click" Background="#333" Foreground="White" Margin="5,0,0,0"/>
+                                    </Grid>
+
+                                    <TextBlock Text="Descripción" Foreground="#AAA" FontSize="11" Margin="0,5,0,2"/>
+                                    <TextBox x:Name="txtDescJuego" Height="80" TextWrapping="Wrap" Margin="0,0,0,10" VerticalContentAlignment="Top"/>
+
+                                    <CheckBox x:Name="chkVisible" Content="Visible en Tienda" IsChecked="True" Foreground="White" Margin="0,5,0,15">
+                                        <CheckBox.LayoutTransform>
+                                            <ScaleTransform ScaleX="1.2" ScaleY="1.2"/>
+                                        </CheckBox.LayoutTransform>
+                                    </CheckBox>
+
+                                    <Button x:Name="btnGuardarJuego" Content="💾 GUARDAR JUEGO" Height="40" Background="#27AE60" Foreground="White" FontWeight="Bold" Margin="0,0,0,10" BorderThickness="0" Click="BtnGuardarJuego_Click"/>
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="10"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button Grid.Column="0" x:Name="btnLimpiarJuego" Content="🧹 NUEVO" Height="35" Background="#333" Foreground="White" BorderThickness="0" Click="BtnLimpiarJuego_Click"/>
+                                        <Button Grid.Column="2" x:Name="btnEliminarJuego" Content="🗑️ BORRAR" Height="35" Background="#FF4444" Foreground="White" BorderThickness="0" Click="BtnEliminarJuego_Click"/>
+                                    </Grid>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Border>
+                    </Grid>
+                </TabItem>
+
                 <TabItem Header="📋 LOGS DE AUDITORÍA">
                     <Grid Margin="0,10,0,0">
                         <Grid.RowDefinitions>
@@ -246,21 +356,18 @@
                         <Border Grid.Row="0" Background="#202020" Padding="10" CornerRadius="5" Margin="0,0,0,10">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="EXPORTAR DATOS:" Foreground="#AAA" VerticalAlignment="Center" Margin="0,0,20,0" FontWeight="Bold"/>
-
                                 <Button x:Name="btnExportPDF" Click="BtnExportPDF_Click" Margin="0,0,10,0" Width="140" Height="30" Background="#E74C3C" Foreground="White" BorderThickness="0" Cursor="Hand">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="📄 PDF" FontWeight="Bold" Margin="0,0,10,0"/>
                                         <TextBlock Text="Generar Informe"/>
                                     </StackPanel>
                                 </Button>
-
                                 <Button x:Name="btnExportExcel" Click="BtnExportExcel_Click" Width="140" Height="30" Background="#27AE60" Foreground="White" BorderThickness="0" Cursor="Hand">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="📊 EXCEL" FontWeight="Bold" Margin="0,0,10,0"/>
                                         <TextBlock Text="Descargar .CSV"/>
                                     </StackPanel>
                                 </Button>
-
                                 <Button x:Name="btnRefrescarLogs" Content="🔄" Width="40" Height="30" Margin="20,0,0,0" Background="#333" Foreground="White" Click="BtnRefrescarLogs_Click"/>
                             </StackPanel>
                         </Border>
@@ -277,7 +384,7 @@
                     </Grid>
                 </TabItem>
 
-                <TabItem>
+                <TabItem x:Name="TabApelaciones">
                     <TabItem.Header>
                         <Grid>
                             <TextBlock Text="⚖️ APELACIONES" VerticalAlignment="Center" Margin="0,0,10,0"/>
@@ -304,12 +411,10 @@
                         <Border Grid.Column="1" Background="#181818" CornerRadius="8" Padding="20">
                             <StackPanel>
                                 <TextBlock Text="REVISIÓN DE CASO" Foreground="#00C3FF" FontWeight="Bold" Margin="0,0,0,20" FontSize="16"/>
-
                                 <TextBlock Text="Mensaje del Usuario:" Foreground="#AAA" FontWeight="Bold" Margin="0,0,0,5"/>
                                 <Border Background="#222" Padding="10" CornerRadius="5" Margin="0,0,0,20">
                                     <TextBlock x:Name="txtMensajeApelacion" Text="Selecciona una apelación..." Foreground="White" TextWrapping="Wrap"/>
                                 </Border>
-
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                     <Button x:Name="btnAceptarApelacion" Content="✅ ACEPTAR (DESBANEAR)" Width="180" Height="40" Background="#27AE60" Foreground="White" FontWeight="Bold" Margin="0,0,10,0" BorderThickness="0" Click="BtnAceptarApelacion_Click" IsEnabled="False"/>
                                     <Button x:Name="btnRechazarApelacion" Content="❌ RECHAZAR (MANTENER)" Width="180" Height="40" Background="#E74C3C" Foreground="White" FontWeight="Bold" BorderThickness="0" Click="BtnRechazarApelacion_Click" IsEnabled="False"/>
