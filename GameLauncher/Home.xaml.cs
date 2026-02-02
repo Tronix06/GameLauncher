@@ -12,6 +12,12 @@ using System.Windows.Threading;
 using System.Windows.Shapes;
 using MySql.Data.MySqlClient;
 using System.IO;
+// LIBRERÍAS IA
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using System.Net.Http.Headers;
 
 namespace GameLauncher
 {
@@ -23,7 +29,6 @@ namespace GameLauncher
         private Usuario usuarioActual;
         private DatabaseConnection db = new DatabaseConnection();
 
-        // Listas separadas para Tienda vs Biblioteca
         private List<Juego> listaTienda = new List<Juego>();
         private List<Juego> listaBiblioteca = new List<Juego>();
 
@@ -35,6 +40,12 @@ namespace GameLauncher
         private DispatcherTimer timerCarrusel;
         private DispatcherTimer timerDescarga;
         private int indiceCarrusel = 0;
+
+        // --- CONFIGURACIÓN IA (GROQ) ---
+        // ⚠️ PEGA AQUÍ TU CLAVE DE GROQ (Empieza por 'gsk_')
+        private const string API_KEY = "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";
+
+        private const string API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
         // Colores
         private Brush colorActivo = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0074E0"));
@@ -51,7 +62,6 @@ namespace GameLauncher
 
             ConfigurarVentanaInicial();
 
-            // 1. Cargas desde BBDD y Datos Locales
             CargarTiendaDesdeBBDD();
             CargarBibliotecaDesdeBBDD();
             CargarAmigos();
@@ -59,7 +69,6 @@ namespace GameLauncher
             if (txtNombrePerfil != null) txtNombrePerfil.Text = usuarioActual.Nombre;
             ConfigurarPermisosRol();
 
-            // Timer Carrusel
             timerCarrusel = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             timerCarrusel.Tick += (s, e) => RotarCarrusel();
             timerCarrusel.Start();
@@ -70,6 +79,96 @@ namespace GameLauncher
         }
 
         public Home() : this(new Usuario { Nombre = "Invitado", Rol = "usuario", Id = 0 }) { }
+
+        // --- MÉTODO IA ACTUALIZADO (MODELO NUEVO) ---
+        // --- MÉTODO IA ACTUALIZADO (HISTORIA LARGA + VENTANA PROPIA) ---
+        // --- MÉTODO IA ACTUALIZADO (DETECTA SI EL JUEGO ES REAL O INVENTADO) ---
+        private async void BtnGenerarLore_Click(object sender, RoutedEventArgs e)
+        {
+            if (juegoSeleccionado == null) return;
+
+            // 1. Interfaz visual
+            txtTituloLore.Text = juegoSeleccionado.Titulo.ToUpper();
+            txtLoreContent.Text = "📡 Analizando base de datos global...\n\nDeterminando si es un juego clásico o un universo nuevo...";
+            OverlayLore.Visibility = Visibility.Visible;
+            btnGenerarLore.IsEnabled = false;
+
+            try
+            {
+                // 2. EL PROMPT PERFECTO (HÍBRIDO: REALIDAD VS FICCIÓN)
+                string prompt = $@"
+                    Actúa como un experto Historiador de Videojuegos y Diseñador Narrativo.
+                    Analiza los siguientes datos de un videojuego:
+                    
+                    TÍTULO: '{juegoSeleccionado.Titulo}'
+                    GÉNERO: '{juegoSeleccionado.Genero}'
+                    DESCRIPCIÓN DEL USUARIO: ""{juegoSeleccionado.Descripcion}""
+
+                    TU TAREA:
+                    Primero, determina si este es un juego real famoso (como 'Tres en Raya', 'Tetris', 'Minecraft', 'Super Mario') o un proyecto ficticio desconocido.
+
+                    CASO A: SI EL JUEGO ES REAL/CLÁSICO:
+                    No inventes ficción absurda. Escribe sobre su origen real, su lógica matemática o su impacto histórico.
+                    - ORÍGENES: Cuándo se creó o cuál es su origen histórico/matemático.
+                    - EL OBJETIVO: Cuál es el conflicto lógico o meta real del juego.
+                    - LEGADO: Por qué es conocido o cuál es su atmósfera real.
+
+                    CASO B: SI EL JUEGO PARECE INVENTADO/DESCONOCIDO:
+                    Usa la descripción del usuario para inventar un 'Lore' (trasfondo) creativo, dramático e inmersivo.
+                    - ORÍGENES: Inventa cómo empezó ese mundo.
+                    - EL CONFLICTO: Facciones, villanos o problemas dramáticos.
+                    - ATMÓSFERA: Describe el ambiente inventado.
+
+                    SALIDA OBLIGATORIA (Sin introducciones, directo al texto):
+                    1. CONTEXTO: (Tu respuesta aquí)
+                    2. DINÁMICA/CONFLICTO: (Tu respuesta aquí)
+                    3. AMBIENTACIÓN: (Tu respuesta aquí)
+                    
+                    Escribe unas 150-200 palabras en total.";
+
+                var requestBody = new
+                {
+                    model = "llama-3.3-70b-versatile",
+                    messages = new[] { new { role = "user", content = prompt } }
+                };
+
+                string jsonContent = JsonSerializer.Serialize(requestBody);
+                var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+                using (HttpClient client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", API_KEY.Trim());
+                    HttpResponseMessage response = await client.PostAsync(API_URL, content);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        string responseString = await response.Content.ReadAsStringAsync();
+                        using (JsonDocument doc = JsonDocument.Parse(responseString))
+                        {
+                            string historiaGenerada = doc.RootElement
+                                .GetProperty("choices")[0]
+                                .GetProperty("message")
+                                .GetProperty("content")
+                                .GetString();
+
+                            txtLoreContent.Text = historiaGenerada.Trim();
+                        }
+                    }
+                    else
+                    {
+                        txtLoreContent.Text = "❌ Error: La IA no pudo analizar el juego.";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                txtLoreContent.Text = $"❌ Error crítico: {ex.Message}";
+            }
+            finally
+            {
+                btnGenerarLore.IsEnabled = true;
+            }
+        }
 
         // --- CARGA DE AMIGOS ---
         private void CargarAmigos()
@@ -95,7 +194,7 @@ namespace GameLauncher
             }
         }
 
-        // --- BBDD: CARGAR TIENDA (AÑADIDA FECHA LANZAMIENTO) ---
+        // --- BBDD: CARGAR TIENDA ---
         private void CargarTiendaDesdeBBDD()
         {
             listaTienda.Clear();
@@ -118,20 +217,17 @@ namespace GameLauncher
                                 RutaImagen = ResolverRutaImagen(reader.IsDBNull(reader.GetOrdinal("imagen_url")) ? "" : reader.GetString("imagen_url"), "Portadas"),
                                 RutaBanner = ResolverRutaImagen(reader.IsDBNull(reader.GetOrdinal("banner_url")) ? "" : reader.GetString("banner_url"), "Banners"),
                                 Genero = reader.IsDBNull(reader.GetOrdinal("genero")) ? "" : reader.GetString("genero"),
-
-                                // LEER FECHA
                                 FechaLanzamiento = reader.IsDBNull(reader.GetOrdinal("fecha_lanzamiento")) ? (DateTime?)null : reader.GetDateTime("fecha_lanzamiento"),
-
                                 EsVisible = true
                             });
                         }
                     }
                 }
             }
-            catch (Exception ex) { MessageBox.Show("Error cargando tienda: " + ex.Message); }
+            catch (Exception ex) { MessageBox.Show("Error tienda: " + ex.Message); }
         }
 
-        // --- BBDD: CARGAR BIBLIOTECA (AÑADIDA FECHA LANZAMIENTO) ---
+        // --- BBDD: CARGAR BIBLIOTECA ---
         private void CargarBibliotecaDesdeBBDD()
         {
             listaBiblioteca.Clear();
@@ -143,10 +239,8 @@ namespace GameLauncher
                                      FROM biblioteca b 
                                      JOIN videojuegos v ON b.videojuego_id = v.id 
                                      WHERE b.usuario_id = @uid";
-
                     MySqlCommand cmd = new MySqlCommand(query, conn);
                     cmd.Parameters.AddWithValue("@uid", usuarioActual.Id);
-
                     using (MySqlDataReader reader = cmd.ExecuteReader())
                     {
                         while (reader.Read())
@@ -159,10 +253,7 @@ namespace GameLauncher
                                 RutaImagen = ResolverRutaImagen(reader.IsDBNull(reader.GetOrdinal("imagen_url")) ? "" : reader.GetString("imagen_url"), "Portadas"),
                                 RutaBanner = ResolverRutaImagen(reader.IsDBNull(reader.GetOrdinal("banner_url")) ? "" : reader.GetString("banner_url"), "Banners"),
                                 Genero = reader.IsDBNull(reader.GetOrdinal("genero")) ? "" : reader.GetString("genero"),
-
-                                // LEER FECHA
                                 FechaLanzamiento = reader.IsDBNull(reader.GetOrdinal("fecha_lanzamiento")) ? (DateTime?)null : reader.GetDateTime("fecha_lanzamiento"),
-
                                 HorasJugadas = reader.GetDouble("horas_jugadas"),
                                 EstaInstalado = reader.GetBoolean("esta_instalado"),
                                 EsFavorito = reader.GetBoolean("es_favorito")
@@ -171,10 +262,10 @@ namespace GameLauncher
                     }
                 }
             }
-            catch (Exception ex) { MessageBox.Show("Error cargando biblioteca: " + ex.Message); }
+            catch (Exception ex) { MessageBox.Show("Error biblioteca: " + ex.Message); }
         }
 
-        // --- LÓGICA DE COMPRA ---
+        // --- COMPRAR JUEGO ---
         private void ComprarJuego(Juego juego)
         {
             if (BiTronixMsgBox.Show($"¿Confirmar compra de {juego.Titulo} por {juego.Precio:C}?", "Pasarela de Pago", BiTronixMsgBox.Type.Confirmation, BiTronixMsgBox.Buttons.YesNo))
@@ -194,19 +285,19 @@ namespace GameLauncher
                     RefrescarInterfaz();
                     if (OverlayDetalle.Visibility == Visibility.Visible) AbrirOverlay(juego);
                 }
-                catch (Exception ex) { BiTronixMsgBox.Show("Error en la compra: " + ex.Message, "Error", BiTronixMsgBox.Type.Error); }
+                catch (Exception ex) { BiTronixMsgBox.Show("Error compra: " + ex.Message, "Error", BiTronixMsgBox.Type.Error); }
             }
         }
 
-        // --- LÓGICA DE INSTALACIÓN ---
+        // --- INSTALAR JUEGO ---
         private void IniciarSimulacionDescarga(Juego juego)
         {
             PanelDescarga.Visibility = Visibility.Visible;
             txtEstadoDescarga.Text = $"DESCARGANDO {juego.Titulo.ToUpper()}...";
             pbDescarga.Value = 0;
-
             timerDescarga = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(20) };
-            timerDescarga.Tick += (s, e) => {
+            timerDescarga.Tick += (s, e) =>
+            {
                 pbDescarga.Value += 1;
                 txtPorcentajeDescarga.Text = $"{pbDescarga.Value}%";
                 if (pbDescarga.Value >= 100)
@@ -234,7 +325,7 @@ namespace GameLauncher
             timerDescarga.Start();
         }
 
-        // --- MÉTODO PARA DESINSTALAR ---
+        // --- DESINSTALAR JUEGO ---
         private void DesinstalarJuego(Juego juego)
         {
             if (MessageBox.Show($"¿Estás seguro de que quieres desinstalar {juego.Titulo}?\nSe mantendrán tus horas jugadas.", "Desinstalar", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes)
@@ -249,22 +340,16 @@ namespace GameLauncher
                         cmd.Parameters.AddWithValue("@jid", juego.Id);
                         cmd.ExecuteNonQuery();
                     }
-
                     juego.EstaInstalado = false;
                     BiTronixMsgBox.Show($"{juego.Titulo} se ha desinstalado.", "Operación Correcta", BiTronixMsgBox.Type.Info);
-
-                    if (juegoSeleccionado == juego && OverlayDetalle.Visibility == Visibility.Visible)
-                        AbrirOverlay(juego);
-
+                    if (juegoSeleccionado == juego && OverlayDetalle.Visibility == Visibility.Visible) AbrirOverlay(juego);
                     RefrescarInterfaz();
                 }
-                catch (Exception ex)
-                {
-                    BiTronixMsgBox.Show("Error al desinstalar: " + ex.Message, "Error", BiTronixMsgBox.Type.Error);
-                }
+                catch (Exception ex) { BiTronixMsgBox.Show("Error al desinstalar: " + ex.Message, "Error", BiTronixMsgBox.Type.Error); }
             }
         }
 
+        // --- JUGAR JUEGO ---
         private void JugarJuego(Juego juego)
         {
             BiTronixMsgBox.Show($"Lanzando {juego.Titulo}...\n¡Disfruta!", "BiTronix", BiTronixMsgBox.Type.Info);
@@ -279,27 +364,20 @@ namespace GameLauncher
                     cmd.ExecuteNonQuery();
                 }
                 juego.HorasJugadas++;
-
-                // Actualizamos visualmente las horas tras jugar
                 RefrescarInterfaz();
             }
             catch { }
         }
 
+        // --- REFRESCO DE INTERFAZ ---
         private void RefrescarInterfaz()
         {
             if (ContenedorJuegos == null) return;
             ContenedorJuegos.Children.Clear();
-
             PanelHero.Visibility = seccionActual == "TIENDA" ? Visibility.Visible : Visibility.Collapsed;
-
             var listaA_Mostrar = seccionActual == "TIENDA" ? listaTienda : listaBiblioteca;
-
-            if (!string.IsNullOrEmpty(txtBuscador.Text))
-                listaA_Mostrar = listaA_Mostrar.Where(j => j.Titulo.ToLower().Contains(txtBuscador.Text.ToLower())).ToList();
-
+            if (!string.IsNullOrEmpty(txtBuscador.Text)) listaA_Mostrar = listaA_Mostrar.Where(j => j.Titulo.ToLower().Contains(txtBuscador.Text.ToLower())).ToList();
             if (criterioOrden == "Nombre") listaA_Mostrar = listaA_Mostrar.OrderBy(j => j.Titulo).ToList();
-
             foreach (var juego in listaA_Mostrar)
             {
                 if (esVistaCuadricula) DibujarTarjetaGrid(juego);
@@ -307,7 +385,7 @@ namespace GameLauncher
             }
         }
 
-        // --- TARJETAS CON MENÚ CONTEXTUAL ---
+        // --- MENÚ CONTEXTUAL ---
         private ContextMenu CrearMenuContextual(Juego juego)
         {
             ContextMenu menu = new ContextMenu();
@@ -335,10 +413,10 @@ namespace GameLauncher
             return menu;
         }
 
+        // --- DIBUJAR TARJETA (GRID) ---
         private void DibujarTarjetaGrid(Juego juego)
         {
             bool enBiblioteca = listaBiblioteca.Any(b => b.Id == juego.Id);
-
             Border tarjeta = new Border { Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#181818")), CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 0, 15, 15), Width = 180, Height = 290, Cursor = Cursors.Hand, BorderBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#333333")), BorderThickness = new Thickness(1) };
             if (enBiblioteca) tarjeta.ContextMenu = CrearMenuContextual(juego);
             tarjeta.MouseLeftButtonDown += (s, e) => AbrirOverlay(juego);
@@ -375,7 +453,6 @@ namespace GameLauncher
             info.Children.Add(new TextBlock { Text = juego.Titulo, Foreground = Brushes.White, FontWeight = FontWeights.Bold, FontSize = 14, TextTrimming = TextTrimming.CharacterEllipsis });
             info.Children.Add(new TextBlock { Text = juego.Genero, Foreground = textoGris, FontSize = 12 });
 
-            // **MOSTRAR HORAS JUGADAS (SOLO EN BIBLIOTECA)**
             if (seccionActual == "BIBLIOTECA" && juego.HorasJugadas > 0)
             {
                 info.Children.Add(new TextBlock { Text = $"⏳ {juego.HorasJugadas} h", Foreground = colorDorado, FontSize = 11, Margin = new Thickness(0, 2, 0, 0) });
@@ -385,6 +462,7 @@ namespace GameLauncher
             tarjeta.Child = grid; ContenedorJuegos.Children.Add(tarjeta);
         }
 
+        // --- DIBUJAR FILA (LISTA) ---
         private void DibujarFilaLista(Juego juego)
         {
             bool enBiblioteca = listaBiblioteca.Any(b => b.Id == juego.Id);
@@ -399,11 +477,8 @@ namespace GameLauncher
 
             StackPanel textos = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             textos.Children.Add(new TextBlock { Text = juego.Titulo, Foreground = Brushes.White, FontWeight = FontWeights.Bold, FontSize = 16 });
-
             string subtexto = juego.Genero;
-            // **MOSTRAR HORAS JUGADAS (SOLO EN BIBLIOTECA)**
             if (seccionActual == "BIBLIOTECA") subtexto += $"  |  ⏳ {juego.HorasJugadas} h";
-
             textos.Children.Add(new TextBlock { Text = subtexto, Foreground = textoGris, FontSize = 12 });
             info.Children.Add(textos);
 
@@ -421,11 +496,10 @@ namespace GameLauncher
                 precio.Foreground = juego.EstaInstalado ? colorVerde : Brushes.Gray;
             }
             grid.Children.Add(precio);
-
-            tarjeta.Child = grid;
-            ContenedorJuegos.Children.Add(tarjeta);
+            tarjeta.Child = grid; ContenedorJuegos.Children.Add(tarjeta);
         }
 
+        // --- OVERLAY DETALLES ---
         private void AbrirOverlay(Juego juego)
         {
             juegoSeleccionado = juego;
@@ -434,11 +508,15 @@ namespace GameLauncher
             txtOverlayTitulo.Text = juego.Titulo.ToUpper();
             txtOverlayGenero.Text = juego.Genero;
 
-            // **AÑADIMOS LA FECHA DE LANZAMIENTO A LA DESCRIPCIÓN**
             string fechaStr = juego.FechaLanzamiento.HasValue ? juego.FechaLanzamiento.Value.ToShortDateString() : "TBA";
             txtOverlayDesc.Text = $"📅 Lanzamiento: {fechaStr}\n\n{juego.Descripcion}";
 
             try { imgOverlayBanner.Source = new BitmapImage(new Uri(juego.RutaBanner, UriKind.RelativeOrAbsolute)); } catch { }
+
+            // RESETEO DE ESTADO DEL BOTÓN DE IA
+            btnGenerarLore.Content = "✨ GENERAR HISTORIA CON IA";
+            btnGenerarLore.IsEnabled = true;
+            btnGenerarLore.Visibility = Visibility.Visible;
 
             if (seccionActual == "TIENDA")
             {
@@ -472,7 +550,6 @@ namespace GameLauncher
                     btnOverlayAccion.IsEnabled = true;
                 }
             }
-
             OverlayDetalle.Visibility = Visibility.Visible;
         }
 
@@ -507,8 +584,8 @@ namespace GameLauncher
         private void BtnMenuTienda_Click(object sender, RoutedEventArgs e) { seccionActual = "TIENDA"; lblSeccionActual.Text = "TIENDA"; btnSortInstalado.IsEnabled = false; RefrescarInterfaz(); }
         private void BtnMenuBiblioteca_Click(object sender, RoutedEventArgs e) { seccionActual = "BIBLIOTECA"; lblSeccionActual.Text = "BIBLIOTECA"; btnSortInstalado.IsEnabled = true; RefrescarInterfaz(); }
         private void WIP_Click(object sender, RoutedEventArgs e) => OverlayWIP.Visibility = Visibility.Visible;
-        private void BtnCerrarOverlay_Click(object sender, RoutedEventArgs e) { OverlayDetalle.Visibility = Visibility.Collapsed; OverlayAjustes.Visibility = Visibility.Collapsed; OverlayPerfil.Visibility = Visibility.Collapsed; OverlayWIP.Visibility = Visibility.Collapsed; }
-        private void BtnCerrarOverlay_Click(object sender, MouseButtonEventArgs e) { OverlayDetalle.Visibility = Visibility.Collapsed; OverlayAjustes.Visibility = Visibility.Collapsed; OverlayPerfil.Visibility = Visibility.Collapsed; OverlayWIP.Visibility = Visibility.Collapsed; }
+        private void BtnCerrarOverlay_Click(object sender, RoutedEventArgs e) { OverlayDetalle.Visibility = Visibility.Collapsed; OverlayAjustes.Visibility = Visibility.Collapsed; OverlayPerfil.Visibility = Visibility.Collapsed; OverlayWIP.Visibility = Visibility.Collapsed; OverlayLore.Visibility = Visibility.Collapsed; }
+        private void BtnCerrarOverlay_Click(object sender, MouseButtonEventArgs e) { OverlayDetalle.Visibility = Visibility.Collapsed; OverlayAjustes.Visibility = Visibility.Collapsed; OverlayPerfil.Visibility = Visibility.Collapsed; OverlayWIP.Visibility = Visibility.Collapsed; OverlayLore.Visibility = Visibility.Collapsed; }
         private void BtnVistaGrid_Click(object sender, RoutedEventArgs e) { esVistaCuadricula = true; RefrescarInterfaz(); }
         private void BtnVistaLista_Click(object sender, RoutedEventArgs e) { esVistaCuadricula = false; RefrescarInterfaz(); }
         private void TxtBuscador_TextChanged(object sender, TextChangedEventArgs e) => RefrescarInterfaz();
