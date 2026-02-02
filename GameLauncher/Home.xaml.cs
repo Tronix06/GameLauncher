@@ -43,7 +43,7 @@ namespace GameLauncher
 
         // --- CONFIGURACIÓN IA (GROQ) ---
         // ⚠️ PEGA AQUÍ TU CLAVE DE GROQ (Empieza por 'gsk_')
-        private const string API_KEY = "pon la api";
+        private const string API_KEY = "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";
 
         private const string API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
