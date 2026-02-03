@@ -577,7 +577,7 @@ namespace GameLauncher
             txtHeroDesc.Text = juego.Descripcion;
         }
 
-        // --- CONTROLADORES DE EVENTOS prueba ---
+        // --- CONTROLADORES DE EVENTOS prueba2 ---
         private void ConfigurarPermisosRol() { if (usuarioActual != null && usuarioActual.EsAdmin()) btnAdmin.Visibility = Visibility.Visible; else btnAdmin.Visibility = Visibility.Collapsed; }
         private void ConfigurarVentanaInicial() { this.Height = SystemParameters.PrimaryScreenHeight * 0.85; this.Width = SystemParameters.PrimaryScreenWidth * 0.85; this.Left = (SystemParameters.PrimaryScreenWidth - Width) / 2; this.Top = (SystemParameters.PrimaryScreenHeight - Height) / 2; }
         private void BtnAdmin_Click(object sender, RoutedEventArgs e) { new AdminWindow(usuarioActual).ShowDialog(); CargarTiendaDesdeBBDD(); RefrescarInterfaz(); }
