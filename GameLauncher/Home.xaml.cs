@@ -41,11 +41,17 @@ namespace GameLauncher
         private DispatcherTimer timerDescarga;
         private int indiceCarrusel = 0;
 
-        // --- CONFIGURACIÓN IA (GROQ) ---
-        // ⚠️ PEGA AQUÍ TU CLAVE DE GROQ (Empieza por 'gsk_')
-        private const string API_KEY = "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";
+        // =========================================================
+        // 🔒 ZONA DE SEGURIDAD IA (SAFE MODE PARA GITHUB)
+        // =========================================================
+
+        // ⚠️ INSTRUCCIONES:
+        // 1. Para subir a GitHub: Deja esta variable vacía ("").
+        // 2. Para probar en local: Pega tu clave entre las comillas.
+        private const string API_KEY = "";
 
         private const string API_URL = "https://api.groq.com/openai/v1/chat/completions";
+        // =========================================================
 
         // Colores
         private Brush colorActivo = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#0074E0"));
@@ -80,14 +86,26 @@ namespace GameLauncher
 
         public Home() : this(new Usuario { Nombre = "Invitado", Rol = "usuario", Id = 0 }) { }
 
-        // --- MÉTODO IA ACTUALIZADO (MODELO NUEVO) ---
-        // --- MÉTODO IA ACTUALIZADO (HISTORIA LARGA + VENTANA PROPIA) ---
-        // --- MÉTODO IA ACTUALIZADO (DETECTA SI EL JUEGO ES REAL O INVENTADO) ---
+        // --- MÉTODO IA SEGURO (SAFE MODE) ---
         private async void BtnGenerarLore_Click(object sender, RoutedEventArgs e)
         {
             if (juegoSeleccionado == null) return;
 
-            // 1. Interfaz visual
+            // 1. COMPROBACIÓN DE SEGURIDAD
+            // Si la clave está vacía (versión GitHub), mostramos aviso y salimos.
+            if (string.IsNullOrEmpty(API_KEY))
+            {
+                txtTituloLore.Text = "MODO DEMOSTRACIÓN";
+                txtLoreContent.Text = "⚠️ FUNCIÓN DESACTIVADA POR SEGURIDAD\n\n" +
+                                      "Esta funcionalidad utiliza Inteligencia Artificial Generativa (Llama 3) en tiempo real.\n\n" +
+                                      "Para habilitarla, es necesario configurar una API KEY válida en el archivo 'Home.xaml.cs'.\n\n" +
+                                      "Por motivos de seguridad, la clave no se incluye en el repositorio público.";
+
+                OverlayLore.Visibility = Visibility.Visible;
+                return;
+            }
+
+            // 2. SI HAY CLAVE (TU PC), EJECUTA LA LÓGICA COMPLETA
             txtTituloLore.Text = juegoSeleccionado.Titulo.ToUpper();
             txtLoreContent.Text = "📡 Analizando base de datos global...\n\nDeterminando si es un juego clásico o un universo nuevo...";
             OverlayLore.Visibility = Visibility.Visible;
@@ -95,7 +113,6 @@ namespace GameLauncher
 
             try
             {
-                // 2. EL PROMPT PERFECTO (HÍBRIDO: REALIDAD VS FICCIÓN)
                 string prompt = $@"
                     Actúa como un experto Historiador de Videojuegos y Diseñador Narrativo.
                     Analiza los siguientes datos de un videojuego:
@@ -156,7 +173,7 @@ namespace GameLauncher
                     }
                     else
                     {
-                        txtLoreContent.Text = "❌ Error: La IA no pudo analizar el juego.";
+                        txtLoreContent.Text = "❌ Error: La IA no pudo analizar el juego. Verifica tu API Key.";
                     }
                 }
             }
@@ -577,7 +594,7 @@ namespace GameLauncher
             txtHeroDesc.Text = juego.Descripcion;
         }
 
-        // --- CONTROLADORES DE EVENTOS prueba2 ---
+        // --- CONTROLADORES DE EVENTOS ---
         private void ConfigurarPermisosRol() { if (usuarioActual != null && usuarioActual.EsAdmin()) btnAdmin.Visibility = Visibility.Visible; else btnAdmin.Visibility = Visibility.Collapsed; }
         private void ConfigurarVentanaInicial() { this.Height = SystemParameters.PrimaryScreenHeight * 0.85; this.Width = SystemParameters.PrimaryScreenWidth * 0.85; this.Left = (SystemParameters.PrimaryScreenWidth - Width) / 2; this.Top = (SystemParameters.PrimaryScreenHeight - Height) / 2; }
         private void BtnAdmin_Click(object sender, RoutedEventArgs e) { new AdminWindow(usuarioActual).ShowDialog(); CargarTiendaDesdeBBDD(); RefrescarInterfaz(); }
